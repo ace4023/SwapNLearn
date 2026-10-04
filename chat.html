@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SwapNLearn – Chat</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav id="nav"></nav>
+<div class="chat">
+  <aside>
+    <button class="room on" id="general"># General (public lobby)</button>
+    <h3 style="margin-top:1rem">Live rooms</h3>
+    <div id="live"></div>
+    <h3 style="margin-top:1rem">Join with a code</h3>
+    <form id="joinForm">
+      <input id="code" placeholder="Paste room code" maxlength="12" autocomplete="off" aria-label="Room code">
+      <button type="submit">Join</button>
+    </form>
+    <h3 style="margin-top:1rem">Host a private room</h3>
+    <form id="newRoom" class="stack">
+      <input id="roomName" placeholder="Room name" maxlength="40" aria-label="Room name">
+      <div style="display:flex;gap:.4rem;margin-top:.4rem;width:100%">
+        <select id="minutes" aria-label="How long the room stays open">
+          <option value="10">10 min</option><option value="15">15 min</option><option value="30" selected>30 min</option>
+          <option value="45">45 min</option><option value="60">1 hour</option><option value="120">2 hours</option>
+        </select>
+        <button type="submit">Start</button>
+      </div>
+    </form>
+  </aside>
+  <section class="main">
+    <header id="head"></header>
+    <div id="log"></div>
+    <form id="composer" hidden>
+      <input id="text" placeholder="Write a message" maxlength="1000" autocomplete="off" aria-label="Message">
+      <button type="submit">Send</button>
+    </form>
+  </section>
+  <aside class="right">
+    <h3>In this room</h3>
+    <div id="members"></div>
+  </aside>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="common.js"></script>
+<script>
+(async () => {
+  const me = await requireUser('chat');
+  if (!me) return;
+  const $ = id => document.getElementById(id);
+  const GENERAL = 'general';
+  const socket = io();
+  watchMessages(socket);
+  let current = null, info = {}, live = [], seen = new Set(), skew = 0;
+
+  const now = () => Date.now() + skew;
+  const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const cd = end => h('span', { class: 'cd', 'data-end': end }, now() < end ? fmt(end - now()) : 'ended');
+  const btn = (label, fn) => h('button', { type: 'button', class: 'ghost', onclick: fn }, label);
+  async function copy(t) {
+    try { await navigator.clipboard.writeText(t); toast('Copied'); } catch { prompt('Copy this:', t); }
+  }
+  setInterval(() => document.querySelectorAll('.cd').forEach(e => {
+    const end = +e.dataset.end; e.textContent = now() < end ? fmt(end - now()) : 'ended';
+  }), 1000);
+
+  function renderLive() {
+    $('live').replaceChildren(...(live.length ? live.map(r =>
+      h('button', { class: 'room' + (r.id === current ? ' on' : ''), onclick: () => openRoom(r.id, r.name) },
+        '🔒 ' + r.name,
+        h('small', {}, r.hostName + ' · ' + r.count + ' inside · ends in ', cd(r.endsAt))))
+      : [h('p', { class: 'handle', style: 'color:var(--mute);font-size:.9rem' }, 'No live rooms right now. A room appears here once its host is inside.')]));
+  }
+
+  function renderHead(name) {
+    const bits = [h('h2', {}, current === GENERAL ? '# General' : '🔒 ' + name)];
+    const bar = h('div', { class: 'bar' });
+    if (info.endsAt) bar.append(h('span', { class: 'pill' }, 'Ends in ', cd(info.endsAt)));
+    if (info.code) bar.append(
+      h('span', { class: 'pill code' }, 'Code ', h('b', {}, info.code)),
+      btn('Copy code', () => copy(info.code)),
+      btn('Share in General', () => api(`/api/rooms/${current}/share`, 'POST').then(() => toast('Code posted in General')).catch(e => toast(e.message))),
+      btn('End room', () => confirm('End this room for everyone?') && api(`/api/rooms/${current}/end`, 'POST').catch(e => toast(e.message))));
+    if (current !== GENERAL) bar.append(btn('Back to General', () => openRoom(GENERAL, 'General')));
+    $('head').replaceChildren(...bits, bar);
+  }
+
+  function renderMsg(m) {
+    seen.add(m.id);
+    const time = new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return h('div', { class: 'msg' + (m.username === me.username ? ' mine' : '') },
+      h('div', { class: 'who' }, h('a', { href: 'profile.html?u=' + encodeURIComponent(m.username) }, m.displayName), ' · ' + time),
+      h('div', { class: 'txt' }, m.text),
+      m.invite ? h('div', { class: 'invite' }, 'Code ', h('b', {}, m.invite.code),
+        h('button', { type: 'button', onclick: () => copy(m.invite.code) }, 'Copy'),
+        h('span', {}, 'ends in ', cd(m.invite.endsAt))) : null);
+  }
+
+  const scrollDown = () => { const l = $('log'); l.scrollTop = l.scrollHeight; };
+
+  async function openRoom(id, name) {
+    const r = await new Promise(res => socket.emit('room:join', id, res));
+    if (r.needCode) { $('code').focus(); return toast('Paste the room code to enter “' + r.name + '”'); }
+    if (r.error) return toast(r.error);
+    current = id; info = r; skew = r.now - Date.now(); seen = new Set();
+    renderHead(name); renderLive();
+    $('general').classList.toggle('on', id === GENERAL);
+    $('composer').hidden = false;
+    try {
+      const { messages } = await api(`/api/rooms/${id}/messages`);
+      $('log').replaceChildren(...(messages.length ? messages.map(renderMsg) : [h('p', { class: 'empty' }, 'No messages yet. Say hi!')]));
+    } catch (e) { toast(e.message); }
+    scrollDown();
+    $('text').focus();
+  }
+
+  socket.on('rooms:live', d => { skew = d.now - Date.now(); live = d.rooms; renderLive(); });
+  socket.on('room:ended', d => {
+    toast('“' + d.name + '” has ended');
+    if (current === d.roomId) { current = null; openRoom(GENERAL, 'General'); }
+  });
+  socket.on('message:new', m => {
+    if (m.roomId !== current || seen.has(m.id)) return;
+    const e = $('log').querySelector('.empty'); if (e) e.remove();
+    $('log').append(renderMsg(m)); scrollDown();
+  });
+  socket.on('room:members', ({ roomId, members }) => {
+    if (roomId !== current) return;
+    $('members').replaceChildren(...members.map(u =>
+      h('a', { class: 'member', href: 'profile.html?u=' + encodeURIComponent(u.username) }, h('span', { class: 'dot' }), u.displayName)));
+  });
+  socket.on('connect', () => { if (current) socket.emit('room:join', current, r => { if (r.error || r.needCode) openRoom(GENERAL, 'General'); }); });
+  socket.on('connect_error', () => (location.href = '/'));
+
+  $('general').onclick = () => openRoom(GENERAL, 'General');
+  $('newRoom').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      const { room } = await api('/api/rooms', 'POST', { name: $('roomName').value, minutes: $('minutes').value });
+      $('roomName').value = '';
+      openRoom(room.id, room.name);
+    } catch (err) { toast(err.message); }
+  });
+  $('joinForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      const { room } = await api('/api/rooms/join', 'POST', { code: $('code').value });
+      $('code').value = '';
+      openRoom(room.id, room.name);
+    } catch (err) { toast(err.message); }
+  });
+  $('composer').addEventListener('submit', e => {
+    e.preventDefault();
+    const text = $('text').value.trim();
+    if (!text) return;
+    socket.emit('message:send', { roomId: current, text }, r => r && r.error && toast(r.error));
+    $('text').value = '';
+  });
+
+  const first = await api('/api/rooms');
+  skew = first.now - Date.now(); live = first.rooms;
+  openRoom(GENERAL, 'General');
+})();
+</script>
+</body>
+</html>

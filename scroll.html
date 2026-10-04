@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SwapNLearn – Scroll</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav id="nav"></nav>
+<main class="feed">
+  <h1 style="margin:0">Scroll</h1>
+  <p class="handle" style="margin:.2rem 0;color:var(--mute)">Languages people are ready to teach. Tap "I'm interested" to let them know.</p>
+  <div class="filters">
+    <select id="lang" aria-label="Filter by language"><option value="">All languages</option></select>
+    <input id="q" placeholder="Search by name or username" aria-label="Search teachers">
+  </div>
+  <div id="feed"></div>
+</main>
+<script src="/socket.io/socket.io.js"></script>
+<script src="languages.js"></script>
+<script src="common.js"></script>
+<script>
+(async () => {
+  const me = await requireUser('scroll');
+  if (!me) return;
+  watchMessages(io());
+  const $ = id => document.getElementById(id);
+  $('lang').append(...LANGUAGES.map(l => h('option', { value: l }, l)));
+
+  function card(p) {
+    const note = h('textarea', { rows: '2', maxlength: '300', 'aria-label': 'Note', placeholder: 'Tell ' + p.displayName + " what you'd like to learn (optional)" });
+    const form = h('form', { class: 'interest', hidden: '' }, note,
+      h('div', {}, h('button', { type: 'submit' }, 'Send interest'), h('button', { type: 'button', class: 'ghost', onclick: () => (form.hidden = true) }, 'Cancel')));
+    const sentTag = () => h('span', { class: 'sent' }, 'Interest sent ✓');
+    const action = p.mine ? h('span', { class: 'sent', style: 'color:var(--mute)' }, 'This is you')
+      : p.sent ? sentTag()
+      : h('button', { type: 'button', onclick: () => { form.hidden = false; note.focus(); } }, "I'm interested");
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        await api('/api/interest', 'POST', { to: p.username, language: p.language, note: note.value });
+        action.replaceWith(sentTag()); form.hidden = true;
+        toast(p.displayName + ' will see this in Messages');
+      } catch (err) { toast(err.message); }
+    });
+    return h('article', { class: 'post' },
+      h('div', { class: 'who' },
+        h('span', { class: 'avatar', 'aria-hidden': 'true' }, p.displayName[0].toUpperCase()),
+        h('div', {}, h('strong', {}, p.displayName), ' ', h('a', { href: 'profile.html?u=' + encodeURIComponent(p.username) }, '@' + p.username))),
+      h('div', { class: 'course' }, h('span', { class: 'lang' }, p.language), h('span', { class: 'chip teach' }, p.level)),
+      p.bio ? h('p', { class: 'bio' }, p.bio) : null,
+      p.learn.length ? h('p', { class: 'bio' }, 'Wants to learn: ' + p.learn.join(', ')) : null,
+      action, form);
+  }
+
+  async function load() {
+    const { posts } = await api('/api/feed?lang=' + encodeURIComponent($('lang').value) + '&q=' + encodeURIComponent($('q').value));
+    $('feed').replaceChildren(...(posts.length ? posts.map(card)
+      : [h('p', { style: 'color:var(--mute)' }, 'Nobody is teaching that yet. Add it under Competencies on your profile to be the first.')]));
+  }
+  let t; $('q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(load, 200); });
+  $('lang').addEventListener('change', load);
+  load();
+})();
+</script>
+</body>
+</html>

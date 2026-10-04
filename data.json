@@ -1,0 +1,118 @@
+{
+  "users": [
+    {
+      "id": "2aa3dfe82209",
+      "username": "abjsd",
+      "displayName": "ace",
+      "passwordHash": "$2a$10$jcsw4S2KIq5OV8TSrwbSJOlIHwJT7E7lAlnLCNOlBFvQZRs/7GoKu",
+      "bio": "",
+      "skillsTeach": [],
+      "skillsLearn": [],
+      "createdAt": 1791125738093,
+      "reads": {}
+    },
+    {
+      "id": "a7062185b2c1",
+      "username": "ace4023",
+      "displayName": "ace",
+      "passwordHash": "$2a$10$PDA0TCXT8a3bqPh1VCqhBuOHWAGEfDWblowpfUUkEx.W7pL5D05ga",
+      "bio": "hi its ace here . I am a student .eager to learn and teach what are the skills i have and the capabilities i can earn",
+      "skillsTeach": [
+        {
+          "name": "JavaScript",
+          "level": "Beginner"
+        },
+        {
+          "name": "PHP",
+          "level": "Intermediate"
+        }
+      ],
+      "skillsLearn": [
+        "Julia"
+      ],
+      "createdAt": 1791126784004,
+      "reads": {
+        "riya2008": 1791138738807
+      }
+    },
+    {
+      "id": "eac3ea2ee6ba",
+      "username": "aanchal4023",
+      "displayName": "aanchal",
+      "passwordHash": "$2a$10$xbG93LKTnmlkmEQHWuiEG.JcrIEe5NWLFVMYaQ2lK/wAIRAaefH8G",
+      "bio": "Hi , I am aanchal here I want to learn as well as let others see the advantages of the skills I have",
+      "skillsTeach": [
+        {
+          "name": "Scala",
+          "level": "Intermediate"
+        }
+      ],
+      "skillsLearn": [
+        "C",
+        "Go"
+      ],
+      "createdAt": 1791126882485,
+      "reads": {}
+    },
+    {
+      "id": "9cac4fd85f57",
+      "username": "riya2008",
+      "displayName": "riya",
+      "passwordHash": "$2a$10$.gzclvO7C6POmz7k/F0NRez3akdTPFRp8PoHvPtHWWM6B/mlwxM3G",
+      "bio": "",
+      "skillsTeach": [
+        {
+          "name": "Kotlin",
+          "level": "Intermediate"
+        }
+      ],
+      "skillsLearn": [
+        "PHP"
+      ],
+      "reads": {
+        "ace4023": 1791138295768
+      },
+      "createdAt": 1791137829001
+    }
+  ],
+  "messages": [
+    {
+      "id": "8af6312c0788",
+      "roomId": "general",
+      "text": "hi",
+      "ts": 1791126808647,
+      "username": "ace4023",
+      "displayName": "ace"
+    },
+    {
+      "id": "724cad0e2ed1",
+      "roomId": "general",
+      "text": "hello",
+      "ts": 1791126889709,
+      "username": "aanchal4023",
+      "displayName": "aanchal"
+    }
+  ],
+  "dms": [
+    {
+      "id": "57e0c04afe1f",
+      "key": "ace4023|riya2008",
+      "from": "riya2008",
+      "to": "ace4023",
+      "ts": 1791138252447,
+      "kind": "interest",
+      "language": "PHP",
+      "level": "Intermediate",
+      "text": "hi i want to learn the basics of PHP"
+    },
+    {
+      "id": "5794d56cc4a9",
+      "key": "ace4023|riya2008",
+      "from": "ace4023",
+      "to": "riya2008",
+      "ts": 1791138288300,
+      "kind": "text",
+      "text": "hi nice to meet u"
+    }
+  ]
+}

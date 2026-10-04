@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SwapNLearn – Messages</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav id="nav"></nav>
+<div class="chat two">
+  <aside>
+    <h3>Messages</h3>
+    <div id="convs"></div>
+  </aside>
+  <section class="main">
+    <header id="head"><h2>Select a conversation</h2></header>
+    <div id="log"><p class="empty">Interest notifications and chats appear here.</p></div>
+    <form id="composer" hidden>
+      <input id="text" placeholder="Write a message" maxlength="1000" autocomplete="off" aria-label="Message">
+      <button type="submit">Send</button>
+    </form>
+  </section>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="common.js"></script>
+<script>
+(async () => {
+  const me = await requireUser('messages');
+  if (!me) return;
+  const $ = id => document.getElementById(id);
+  let open = null, otherName = '', seen = new Set();
+  const time = ts => new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const preview = c => (c.last.kind === 'interest'
+    ? (c.last.from === me.username ? 'You showed interest in ' : 'Interested in ') + c.last.language : c.last.text).slice(0, 50);
+
+  async function loadList() {
+    const { conversations } = await api('/api/messages');
+    $('convs').replaceChildren(...(conversations.length ? conversations.map(c =>
+      h('button', { class: 'room' + (c.username === open ? ' on' : ''), onclick: () => openThread(c.username) },
+        h('span', {}, c.displayName, c.unread ? h('span', { class: 'badge' }, String(c.unread)) : null),
+        h('small', {}, preview(c))))
+      : [h('p', { style: 'color:var(--mute);font-size:.9rem' }, 'No messages yet. Use Scroll to tell a teacher you are interested.')]));
+  }
+
+  function renderMsg(m) {
+    seen.add(m.id);
+    const mine = m.from === me.username;
+    if (m.kind === 'interest') return h('div', { class: 'note' },
+      h('strong', {}, mine ? 'You told ' + otherName + " you're interested in " + m.language
+        : otherName + ' is interested in your ' + m.language + ' course (' + m.level + ')'),
+      m.text ? h('div', { class: 'txt' }, m.text) : null, h('small', {}, time(m.ts)));
+    return h('div', { class: 'msg' + (mine ? ' mine' : '') }, h('div', { class: 'txt' }, m.text), h('div', { class: 'who' }, time(m.ts)));
+  }
+
+  const scrollDown = () => { const l = $('log'); l.scrollTop = l.scrollHeight; };
+
+  async function openThread(un) {
+    try {
+      const d = await api('/api/messages/' + encodeURIComponent(un));
+      open = un; otherName = d.user.displayName; seen = new Set();
+      $('head').replaceChildren(h('h2', {}, d.user.displayName), h('a', { href: 'profile.html?u=' + encodeURIComponent(un) }, 'View profile'));
+      $('log').replaceChildren(...d.messages.map(renderMsg));
+      $('composer').hidden = false;
+      history.replaceState(null, '', '?u=' + encodeURIComponent(un));
+      scrollDown(); $('text').focus();
+      loadList(); refreshBadge();
+    } catch (e) { toast(e.message); }
+  }
+
+  const socket = io();
+  watchMessages(socket, m => {
+    if (m.from === open) { openThread(open); return true; }
+    loadList();
+    return false;
+  });
+  socket.on('connect_error', () => (location.href = '/'));
+
+  $('composer').addEventListener('submit', async e => {
+    e.preventDefault();
+    const text = $('text').value.trim();
+    if (!text || !open) return;
+    try {
+      const { message } = await api('/api/messages/' + encodeURIComponent(open), 'POST', { text });
+      $('text').value = '';
+      if (!seen.has(message.id)) { $('log').append(renderMsg(message)); scrollDown(); }
+      loadList();
+    } catch (err) { toast(err.message); }
+  });
+
+  await loadList();
+  const wanted = new URLSearchParams(location.search).get('u');
+  if (wanted) openThread(wanted);
+})();
+</script>
+</body>
+</html>

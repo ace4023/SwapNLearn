@@ -1,0 +1,13 @@
+{
+  "name": "swapnlearn",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SwapNLearn prototype: auth, profiles with skills, live chat rooms",
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "socket.io": "^4.7.5"
+  }
+}

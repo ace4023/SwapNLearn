@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SwapNLearn – Profile</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav id="nav"></nav>
+<main class="page">
+  <section class="card" id="profile"></section>
+  <section class="card">
+    <h2>Find people to swap with</h2>
+    <input id="search" placeholder="Search by name or language, e.g. Python" aria-label="Search people">
+    <div class="people" id="people"></div>
+  </section>
+</main>
+<script src="languages.js"></script>
+<script src="common.js"></script>
+<script>
+(async () => {
+  const me = await requireUser('profile');
+  if (!me) return;
+  const $ = id => document.getElementById(id);
+  const who = new URLSearchParams(location.search).get('u');
+  const tip = (text, tipText) => h('span', { class: 'tip', tabindex: '0', 'data-tip': tipText }, text);
+
+  // Pick a programming language from the list (and a level) and add it; click x to remove.
+  function skillPicker(box, initial, withLevel) {
+    const items = initial.map(s => (typeof s === 'string' ? { name: s, level: LEVELS[0] } : { ...s }));
+    const pick = h('select', { 'aria-label': 'Programming language' });
+    const lvl = withLevel ? h('select', { 'aria-label': 'Level' }, LEVELS.map(l => h('option', { value: l }, l))) : null;
+    const add = h('button', { type: 'button', class: 'ghost' }, 'Add');
+    function draw() {
+      const left = LANGUAGES.filter(l => !items.some(i => i.name === l));
+      pick.replaceChildren(h('option', { value: '' }, 'Choose a language'), ...left.map(l => h('option', { value: l }, l)));
+      box.replaceChildren(
+        h('div', { class: 'chips' }, items.map((s, i) =>
+          h('span', { class: 'chip' }, withLevel ? s.name + ' · ' + s.level : s.name,
+            h('button', { type: 'button', class: 'x', 'aria-label': 'Remove ' + s.name, onclick: () => { items.splice(i, 1); draw(); } }, '×')))),
+        h('div', { class: 'adder' }, pick, lvl, add));
+    }
+    add.addEventListener('click', () => {
+      if (!pick.value) return;
+      items.push({ name: pick.value, level: lvl ? lvl.value : undefined });
+      draw();
+    });
+    draw();
+    return { get: () => items.map(s => (withLevel ? { name: s.name, level: s.level } : s.name)) };
+  }
+
+  function showReadOnly(u) {
+    const sec = (title, list, kind) => list.length ? [h('div', { class: 'row' }, title), chips(list, kind)] : [];
+    $('profile').replaceChildren(
+      h('h1', {}, u.displayName),
+      h('p', { class: 'handle' }, '@' + u.username),
+      u.bio ? h('p', {}, u.bio) : null,
+      ...sec(tip('Competencies', 'Skills can teach'), u.skillsTeach, 'teach'),
+      ...sec(tip('Aspiration', 'Skills to learn'), u.skillsLearn, 'learn'),
+      !u.skillsTeach.length && !u.skillsLearn.length ? h('p', { class: 'handle' }, 'No languages listed yet.') : null,
+      h('p', {}, h('a', { href: 'chat.html' }, 'Go to chat')));
+  }
+
+  function showEditor(u) {
+    const name = h('input', { id: 'dn', maxlength: '40', value: u.displayName });
+    const bio = h('textarea', { id: 'bio', rows: '3', maxlength: '300' }); bio.value = u.bio;
+    const boxes = [1, 2].map(() => h('div', { class: 'picker' }));
+    const pTeach = skillPicker(boxes[0], u.skillsTeach, true);
+    const pLearn = skillPicker(boxes[1], u.skillsLearn, false);
+    const msg = h('p', { class: 'err', role: 'status' });
+    const form = h('form', {},
+      h('h1', {}, 'Your profile'),
+      h('p', { class: 'handle' }, '@' + u.username),
+      h('label', { for: 'dn' }, 'Name'), name,
+      h('label', { for: 'bio' }, 'About you'), bio,
+      h('label', {}, tip('Competencies', 'Skills can teach')), boxes[0],
+      h('label', {}, tip('Aspiration', 'Skills to learn')), boxes[1],
+      msg,
+      h('button', { type: 'submit' }, 'Save profile'));
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        await api('/api/profile', 'PUT', {
+          displayName: name.value, bio: bio.value,
+          skillsTeach: pTeach.get(), skillsLearn: pLearn.get()
+        });
+        msg.style.color = 'var(--teal-d)'; msg.textContent = 'Profile saved';
+        loadPeople();
+      } catch (err) { msg.style.color = ''; msg.textContent = err.message; }
+    });
+    $('profile').replaceChildren(form);
+  }
+
+  async function loadPeople() {
+    const { users } = await api('/api/users?q=' + encodeURIComponent($('search').value));
+    $('people').replaceChildren(...(users.length ? users.map(u =>
+      h('a', { class: 'person', href: 'profile.html?u=' + encodeURIComponent(u.username) },
+        h('strong', {}, u.displayName + (u.username === me.username ? ' (you)' : '')),
+        u.skillsTeach.length ? chips(u.skillsTeach, 'teach') : h('span', { class: 'handle' }, 'No competencies listed yet'))
+    ) : [h('p', { class: 'handle' }, 'Nobody matches that search.')]));
+  }
+
+  if (!who || who === me.username) showEditor(me);
+  else {
+    try { showReadOnly((await api('/api/users/' + encodeURIComponent(who))).user); }
+    catch (err) { $('profile').replaceChildren(h('p', {}, err.message), h('a', { href: 'profile.html' }, 'Back to my profile')); }
+  }
+  let t; $('search').addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadPeople, 200); });
+  loadPeople();
+})();
+</script>
+</body>
+</html>

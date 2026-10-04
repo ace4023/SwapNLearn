@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SwapNLearn – Log in</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="auth">
+  <h1>SwapNLearn</h1>
+  <p class="sub">Teach what you know. Learn what you don't.</p>
+  <div class="tabs">
+    <button type="button" id="tabLogin" class="on">Log in</button>
+    <button type="button" id="tabSignup">Sign up</button>
+  </div>
+  <form id="form" autocomplete="on">
+    <div id="nameRow" hidden>
+      <label for="displayName">Your name</label>
+      <input id="displayName" maxlength="40" autocomplete="name" placeholder="Letters only, e.g. Asha Patil">
+    </div>
+    <label for="username">Username</label>
+    <input id="username" required maxlength="20" autocomplete="username" aria-describedby="uhint">
+    <p class="hint" id="uhint">3–20 characters: letters, numbers and _ only</p>
+    <label for="password">Password</label>
+    <input id="password" type="password" required maxlength="72" autocomplete="current-password" aria-describedby="phint">
+    <p class="hint" id="phint" hidden>8+ characters with a capital letter, a small letter and a special character (e.g. @ # ! $)</p>
+    <p class="err" id="err" role="alert"></p>
+    <button type="submit" id="go">Log in</button>
+  </form>
+</main>
+<script src="common.js"></script>
+<script>
+let mode = 'login';
+const $ = id => document.getElementById(id);
+api('/api/me').then(() => (location.href = 'chat.html')).catch(() => {});
+
+function setMode(m) {
+  mode = m;
+  $('tabLogin').classList.toggle('on', m === 'login');
+  $('tabSignup').classList.toggle('on', m === 'signup');
+  $('nameRow').hidden = m === 'login';
+  $('phint').hidden = m === 'login';
+  $('go').textContent = m === 'login' ? 'Log in' : 'Create account';
+  $('password').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+  $('err').textContent = '';
+}
+$('tabLogin').onclick = () => setMode('login');
+$('tabSignup').onclick = () => setMode('signup');
+
+// Same rules the server enforces (the server is the real check).
+function validate() {
+  const u = $('username').value.trim(), p = $('password').value, n = $('displayName').value.trim();
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(u)) return 'Username must be 3–20 characters: letters, numbers and _ only';
+  if (mode === 'login') return null;
+  if (n.length < 2 || !/^\p{L}+(?: +\p{L}+)*$/u.test(n)) return 'Name must contain letters only';
+  if (p.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Z]/.test(p)) return 'Password needs at least one capital letter';
+  if (!/[a-z]/.test(p)) return 'Password needs at least one small letter';
+  if (!/[^A-Za-z0-9\s]/.test(p)) return 'Password needs at least one special character (e.g. @ # ! $)';
+  return null;
+}
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('err').textContent = '';
+  const problem = validate();
+  if (problem) { $('err').textContent = problem; return; }
+  try {
+    await api('/api/' + mode, 'POST', {
+      username: $('username').value,
+      password: $('password').value,
+      displayName: $('displayName').value
+    });
+    location.href = mode === 'signup' ? 'profile.html' : 'chat.html';
+  } catch (err) { $('err').textContent = err.message; }
+});
+</script>
+</body>
+</html>
